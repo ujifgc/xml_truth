@@ -1,66 +1,103 @@
 require 'helper'
 
-module XmlTruth
-  module DOM
-    module XML
-      ###
-      # This benchmark is for comparing document parsing speeds
-      class LargeDocumentXPathSearchTest < TestCase
-        def setup
-          @n        = (ENV['N'] || 1000).to_i
-          @filename = File.join(ASSETS, 'timeline.xml')
-          @stat     = File.stat(@filename)
-          @xml      = File.read(@filename)
+class C2XMLWalk < MiniTest::Unit::TestCase
+  def self.bench_range
+    bench_exp 1, 1000
+  end
 
-          puts
-          puts "#{name} N=#{@n}"
+  def actual_sum
+    self.class.bench_range.inject(0){ |all,n| all += n*@id_sum }
+  end
 
-          @ndoc = Nokogiri::XML(@xml)
-          @ldoc = LibXML::XML::Parser.string(@xml).parse
-          @hdoc = Hpricot.XML(@xml)
+  def setup
+    data = File.read(File.join(ASSETS, 'timeline.xml'))
+    @id_sum = data.scan(/\<id\>\s*(\d+)\s*\<\/id\>/).flatten.map(&:to_i).inject(0,&:+)
+    
+    @ndoc = Nokogiri::XML(data)
+    @ldoc = LibXML::XML::Parser.string(data).parse
+    @hdoc = Hpricot.XML(data)
+    @rdoc = REXML::Document.new(data)
+    @odoc = Ox.parse(data)
+  end
 
-          if ENV['REXML']
-            @rdoc = REXML::Document.new(@xml)
-          end
-
-          GC.start
+  def bench_nokogiri
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        list = @ndoc.root.children.dup.to_a
+        while !list.empty?
+          node = list.pop
+          sum += node.content.to_i if node.name == 'id'
+          list += node.children
         end
+      end
+    end
+    assert_equal actual_sum, sum
+  end
 
-        def teardown
-          GC.start
+  def bench_libxml
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        list = @ldoc.root.children.dup
+        while !list.empty?
+          node = list.pop
+          sum += node.content.to_i if node.name == 'id'
+          list += node.children
         end
+      end
+    end
+    assert_equal actual_sum, sum
+  end
 
-        def test_tree_traversal
-          bm(12) do |x|
-            GC.start
-            measure('nokogiri') do @n.times {
-              list = @ndoc.root.children.to_a
-              while !list.empty?
-                list += list.pop.children
-              end
-            } end
-
-            GC.start
-            measure('libxml-ruby') do @n.times {
-              list = @ldoc.root.children
-              while !list.empty?
-                list += list.pop.children
-              end
-            } end
-
-            GC.start
-            measure('hpricot') do @n.times {
-              list = @hdoc.root.children
-              while !list.empty?
-                node = list.pop
-                next unless node.respond_to?(:children)
-                next unless node.children
-                list += node.children
-              end
-            } end
+  def bench_ox
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        list = @odoc.nodes.dup
+        while !list.empty?
+          node = list.pop
+          if node.kind_of?(Ox::Element)
+            sum += node.text.to_i if node.value == 'id'
+            list += node.nodes
           end
         end
       end
     end
+    assert_equal actual_sum, sum
+  end
+
+  def bench_hpricot
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        list = @hdoc.root.children.dup
+        while !list.empty?
+          node = list.pop
+          next unless node.respond_to?(:children)
+          sum += node.inner_html.to_i if node.name == 'id'
+          next unless node.children
+          list += node.children
+        end
+      end
+    end
+    assert_equal actual_sum, sum
+  end
+
+  def bench_rexml
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        list = @rdoc.root.children.dup
+        while !list.empty?
+          node = list.pop
+          next unless node.respond_to?(:children)
+          sum += node.text.to_i if node.name == 'id'
+          next unless node.children
+          list += node.children
+        end
+      end
+    end
+    assert_equal actual_sum, sum
   end
 end

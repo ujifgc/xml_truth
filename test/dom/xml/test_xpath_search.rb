@@ -1,87 +1,124 @@
 require 'helper'
 
-module XmlTruth
-  module DOM
-    module XML
-      ###
-      # This benchmark is for comparing document parsing speeds
-      class LargeDocumentXPathSearchTest < TestCase
-        def setup
-          @n        = (ENV['N'] || 1000).to_i
-          @filename = File.join(ASSETS, 'itunes.xml')
-          @stat     = File.stat(@filename)
-          @xml      = File.read(@filename)
+class XMLPath < MiniTest::Unit::TestCase
+  def self.bench_range
+    [1,2,4]
+  end
 
-          puts
-          puts "#{name} N=#{@n}"
+  def setup
+    data
+    hdoc
+    ndoc
+    ldoc
+    odoc
+  end
 
-          @ndoc = Nokogiri::XML(@xml)
-          @ldoc = LibXML::XML::Parser.string(@xml).parse
-          @hdoc = Hpricot.XML(@xml)
+  def data
+    @@data ||= begin
+      puts 'Parsing...'
+      File.read(File.join(ASSETS, 'itunes.xml'))
+    end
+    @@number_of_integers ||= @@data.scan('<integer>').count
+    @@number_of_rated ||= @@data.scan('<key>Rating</key>').count
+    @@data
+  end
 
-          if ENV['SLOW']
-            @rdoc = REXML::Document.new(@xml)
-          end
+  def hdoc
+    @@hdoc ||= Hpricot.XML(data)
+  end
 
-          GC.start
-        end
+  def ldoc
+    @@ldoc ||= LibXML::XML::Parser.string(data).parse
+  end
 
-        def teardown
-          GC.start
-        end
+  def ndoc
+    @@ndoc ||= Nokogiri::XML(data)
+  end
 
-        def test_simple_xpath
-          bm(12) do |x|
-            GC.start
-            measure('nokogiri') do @n.times {
-              @ndoc.xpath('//integer').length
-            } end
+  def odoc
+    @@odoc ||= Ox.parse(data)
+  end
 
-            GC.start
-            measure('libxml-ruby') do @n.times {
-              @ldoc.find('//integer').length
-            } end
+  def rdoc
+    @@rdoc ||= REXML::Document.new(data)
+  end
+end
 
-            GC.start
-            measure('hpricot') do @n.times {
-              @hdoc.search('//integer').length
-            } end
+class C3BasicPath < XMLPath
+  def path
+    '//integer'
+  end
 
-            if ENV['SLOW']
-              GC.start
-              measure('rexml') do @n.times {
-                REXML::XPath.match(@rdoc, '//integer').length
-              } end
-            end
-          end
-        end
+  def opath
+    '*/integer'
+  end
 
-        def test_medium_xpath
-          bm(12) do |x|
-            GC.start
-            measure('nokogiri') do @n.times {
-              @ndoc.xpath('//key[text() = "Rating"]').length
-            } end
+  def actual_sum
+    self.class.bench_range.inject(0){ |all,n| all += n*@@number_of_integers }
+  end
 
-            GC.start
-            measure('libxml-ruby') do @n.times {
-              @ldoc.find('//key[text() = "Rating"]').length
-            } end
-
-            GC.start
-            measure('hpricot') do @n.times {
-              @hdoc.search('//key[text() = "Rating"]').length
-            } end
-
-            if ENV['SLOW']
-              GC.start
-              measure('rexml') do @n.times {
-                REXML::XPath.match(@rdoc, '//key[text() = "Rating"]').length
-              } end
-            end
-          end
-        end
+  def bench_nokogiri
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        sum += ndoc.xpath(path).length
       end
     end
+    assert_equal actual_sum, sum
+  end
+
+  def bench_libxml
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        sum += ldoc.find(path).length
+      end
+    end
+    assert_equal actual_sum, sum
+  end
+
+  def bench_ox
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        sum += odoc.locate(opath).length
+      end
+    end
+    assert_equal actual_sum, sum
+  end
+
+  def bench_hpricot
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        sum += hdoc.search(path).length
+      end
+    end
+    assert_equal actual_sum, sum
+  end
+
+  def bench_rexml
+    skip 'Rexml xpath speed is inadequate'
+    sum = 0
+    assert_performance_linear do |n|
+      n.times do
+        sum += REXML::XPath.match(rdoc, path).length
+      end
+    end
+    assert_equal actual_sum, sum
+  end
+end
+
+class C4MediumPath < C3BasicPath
+  def path
+    '//key[text() = "Rating"]'
+  end
+
+  def bench_ox
+    skip 'Ox does not locate by content'
+  end
+
+  def actual_sum
+    self.class.bench_range.inject(0){ |all,n| all += n*@@number_of_rated }
   end
 end

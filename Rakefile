@@ -1,14 +1,10 @@
-# -*- ruby -*-
-
 require 'rubygems'
-require 'hoe'
-require './lib/xml_truth.rb'
+require 'rake/testtask'
 
-Hoe.new('xml_truth', XmlTruth::VERSION) do |p|
-  p.developer('Aaron Patterson', 'aaronp@rubyforge.org')
-  p.readme_file   = ['README', ENV['HLANG'], 'rdoc'].compact.join('.')
-  p.history_file  = ['CHANGELOG', ENV['HLANG'], 'rdoc'].compact.join('.')
-  p.extra_rdoc_files  = FileList['*.rdoc']
+Rake::TestTask.new(:benchmark) do |test|
+  test.libs << 'test'
+  test.test_files = Dir['test/**/test_*.rb']
+  test.verbose = true
 end
 
-# vim: syntax=Ruby
+task :default => :benchmark

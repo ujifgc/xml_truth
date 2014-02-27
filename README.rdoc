@@ -18,3 +18,14 @@ These tests were conducted with:
  * Hpricot version 0.7 (hpricot does not have a VERSION constant)
  * N being the number of iterations in each test
 
+{document_parsing.rdoc}[link:document_parsing.rdoc]
+
+== Results of actual gems for 2014-02-27
+
+ * Hpricot: 0.8.6
+ * LibXML: 2.7.0
+ * Nokogiri: 1.6.1
+ * Ox: 2.1.1
+ * Rexml: 3.1.7.3
+
+{xml-truth-2014.md}[link:xml-truth-2014.md]

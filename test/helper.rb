@@ -1,52 +1,35 @@
-require 'test/unit'
-require 'benchmark'
 require 'rubygems'
+require 'minitest/autorun'
+require 'minitest/benchmark'
+
 require 'hpricot'
-require 'rexml/document'
 require 'libxml'
 require 'nokogiri'
+require 'ox'
+require 'rexml/document'
 
 ASSETS  = File.expand_path(File.join(File.dirname(__FILE__), 'assets'))
 
 puts
-puts "Nokogiri: #{Nokogiri::VERSION}"
+puts "Hpricot: #{Gem.loaded_specs["hpricot"].version}"
 puts "LibXML: #{LibXML::XML::VERSION}"
+puts "Nokogiri: #{Nokogiri::VERSION}"
+puts "Ox: #{Ox::VERSION}"
+puts "Rexml: #{REXML::VERSION}"
 puts
 
-module XmlTruth
-  module Tms
-    attr_accessor :stat, :n
-
-    def format arg0 = nil
-      super("%10.6u %10.6y %10.6t %10.6r %0.2f\n", kbps)
-    end
-
-    def kbps
-      stat.size * n / 1024.0 / real
-    end
+class ColoredIO
+  def initialize(io)
+    @io = io
   end
 
-  class TestCase < Test::Unit::TestCase
-    include Benchmark
+  def print(o)
+    super unless o == "S"
+  end
 
-    unless RUBY_VERSION >= '1.9'
-      undef :default_test
-    end
-    alias :old_measure :measure
-    def measure label = "", &block
-      tms = old_measure(label, &block)
-      tms.extend(XmlTruth::Tms)
-      tms.stat  = @stat
-      tms.n     = @n
-      print label.ljust(@width)
-      print tms.format
-    end
-
-    alias :old_bm :bm
-    def bm(label_width = 0, *labels, &blk)
-      @width = label_width
-      c = "#{CAPTION.chomp}   kBps\n"
-      benchmark(" "*label_width + c, label_width, FMTSTR, *labels, &blk)
-    end
+  def puts(*o)
+    super
   end
 end
+
+MiniTest::Unit.output = ColoredIO.new(MiniTest::Unit.output)

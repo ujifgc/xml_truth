@@ -1,64 +1,44 @@
 require 'helper'
 
-module XmlTruth
-  module DOM
-    module HTML
-      ###
-      # This benchmark is for comparing document parsing speeds
-      class DocumentParsingTest < TestCase
-        def setup
-          @n          = (ENV['N'] || 100).to_i
-          @file_list  = Dir[File.join(ASSETS, 'html', '*.html')]
+class C1HTMLParse < MiniTest::Unit::TestCase
+  def self.bench_range
+    bench_exp 1, 100
+  end
 
-          @stat = Struct.new(:size).new(
-            @file_list.map { |x|
-              File.stat(x)
-            }.inject(0) { |m,o| m + o.size }
-          )
+  def files
+    @files ||= Dir[File.join(ASSETS, 'html', '*.html')]
+  end
 
-          GC.start
-        end
+  def bench_hpricot
+    assert_performance_constant do
+      files.each { |file| Hpricot(File.read(file)) }
+    end
+  end
 
-        def teardown
-          GC.start
-        end
+  def bench_nokogiri
+    assert_performance_constant do
+      files.each { |file| Nokogiri::HTML(File.read(file)) }
+    end
+  end
 
-        def test_in_memory_parsing
-          bm(12) do |x|
-            GC.start
-            measure('hpricot') do @n.times {
-              @file_list.each { |file| Hpricot(File.read(file)) }
-            } end
+  def bench_ox
+    skip 'fails with Ox::ParseError'
+    assert_performance_constant do
+      files.each { |file| Ox.parse(File.read(file)) }
+    end
+  end
 
-            GC.start
-            measure('nokogiri') do @n.times {
-              @file_list.each { |file| Nokogiri::HTML(File.read(file)) }
-            } end
+  def bench_libxml
+    skip 'fails with LibXML::XML::Error'
+    assert_performance_constant do
+      files.each { |file| LibXML::XML::HTMLParser.string(File.read(file)).parse }
+    end
+  end
 
-            # libxml-ruby breaks
-            #GC.start
-            #measure('libxml-ruby') do @n.times {
-            #  LibXML::XML::HTMLParser.string(@html).parse
-            #} end
-          end
-        end
-
-        def test_IO_parsing
-          bm(12) do |x|
-            GC.start
-            measure('hpricot') do @n.times {
-              @file_list.each { |file| File.open(file) { |html| Hpricot(html) }}
-            } end
-
-            GC.start
-            measure('nokogiri') do @n.times {
-              @file_list.each { |file|
-                File.open(file) { |html| Nokogiri::HTML(html) }
-              }
-            } end
-          end
-        end
-      end
+  def bench_rexml
+    skip 'fails with REXML::ParseException'
+    assert_performance_constant do
+      files.each { |file| REXML::Document.new(File.open(file)) }
     end
   end
 end
